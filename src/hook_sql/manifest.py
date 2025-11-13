@@ -226,7 +226,7 @@ def define_table_spec(
 
 
 def build_dag(
-    specs: list[dict],
+    specs: dict[str, dict],
     show_warnings: bool = False
 ) -> nx.DiGraph:
     """
@@ -260,13 +260,13 @@ def build_dag(
         - Node identifiers are unique on schema.table combination
 
     Example:
-        >>> specs = [
-        ...     {"schema": "omnium", "table": "order_lines", "grain": ["order_id__alias", "product_id"], "references": ["order_id__alias", "product_id"]},
-        ...     {"schema": "omnium", "table": "orders", "grain": ["order_id"], "grain_aliases": ["order_id__alias"], "references": ["customer_id"]},
-        ...     {"schema": "omnium", "table": "customers", "grain": ["customer_id"], "references": ["region_id"]},
-        ...     {"schema": "omnium", "table": "products", "grain": ["product_id"]},
-        ...     {"schema": "omnium", "table": "regions", "grain": ["region_id"]}
-        ... ]
+        >>> specs = {
+        ...     "omnium__order_lines": {"schema": "omnium", "table": "order_lines", "grain": ["order_id__alias", "product_id"], "references": ["order_id__alias", "product_id"]},
+        ...     "omnium__orders": {"schema": "omnium", "table": "orders", "grain": ["order_id"], "grain_aliases": ["order_id__alias"], "references": ["customer_id"]},
+        ...     "omnium__customers": {"schema": "omnium", "table": "customers", "grain": ["customer_id"], "references": ["region_id"]},
+        ...     "omnium__products": {"schema": "omnium", "table": "products", "grain": ["product_id"]},
+        ...     "omnium__regions": {"schema": "omnium", "table": "regions", "grain": ["region_id"]}
+        ... }
         >>> build_dag(specs).edges(data=True)
         OutEdgeDataView([('omnium__order_lines', 'omnium__orders', {'key': 'order_id__alias'}), ('omnium__order_lines', 'omnium__products', {'key': 'product_id'}), ('omnium__orders', 'omnium__customers', {'key': 'customer_id'}), ('omnium__customers', 'omnium__regions', {'key': 'region_id'})])
     """
@@ -274,7 +274,7 @@ def build_dag(
 
     # Create a dictionary keyed by node_id for easier processing
     spec_dict = {}
-    for cfg in specs:
+    for _, cfg in specs.items():
         node_id = f"{cfg['schema']}__{cfg['table']}"
         grain = cfg.get("grain", [])
         refs = cfg.get("references", [])
@@ -335,13 +335,13 @@ def build_dag_manifest(G: nx.DiGraph) -> dict[str, dict]:
 
     Example:
         >>> import json
-        >>> specs = [
-        ...     {"schema": "omnium", "table": "order_lines", "grain": ["order_id__alias", "product_id"], "references": ["order_id__alias", "product_id"]},
-        ...     {"schema": "omnium", "table": "orders", "grain": ["order_id"], "grain_aliases": ["order_id__alias"], "references": ["customer_id"]},
-        ...     {"schema": "omnium", "table": "customers", "grain": ["customer_id"], "references": ["region_id"]},
-        ...     {"schema": "omnium", "table": "products", "grain": ["product_id"]},
-        ...     {"schema": "omnium", "table": "regions", "grain": ["region_id"]}
-        ... ]
+        >>> specs = {
+        ...     "omnium__order_lines": {"schema": "omnium", "table": "order_lines", "grain": ["order_id__alias", "product_id"], "references": ["order_id__alias", "product_id"]},
+        ...     "omnium__orders": {"schema": "omnium", "table": "orders", "grain": ["order_id"], "grain_aliases": ["order_id__alias"], "references": ["customer_id"]},
+        ...     "omnium__customers": {"schema": "omnium", "table": "customers", "grain": ["customer_id"], "references": ["region_id"]},
+        ...     "omnium__products": {"schema": "omnium", "table": "products", "grain": ["product_id"]},
+        ...     "omnium__regions": {"schema": "omnium", "table": "regions", "grain": ["region_id"]}
+        ... }
         >>> dag = build_dag(specs)
         >>> manifest = build_dag_manifest(dag)
         >>> print(json.dumps(manifest, indent=4))
@@ -493,13 +493,13 @@ def build_mermaid_from_graph(G: nx.DiGraph) -> str:
         str: Mermaid flowchart definition as a string.
 
     Example:
-        >>> specs = [
-        ...     {"schema": "omnium", "table": "order_lines", "grain": ["order_id__alias", "product_id"], "references": ["order_id__alias", "product_id"]},
-        ...     {"schema": "omnium", "table": "orders", "grain": ["order_id"], "grain_aliases": ["order_id__alias"], "references": ["customer_id"]},
-        ...     {"schema": "omnium", "table": "customers", "grain": ["customer_id"], "references": ["region_id"]},
-        ...     {"schema": "omnium", "table": "products", "grain": ["product_id"]},
-        ...     {"schema": "omnium", "table": "regions", "grain": ["region_id"]}
-        ... ]
+        >>> specs = {
+        ...     "omnium__order_lines": {"schema": "omnium", "table": "order_lines", "grain": ["order_id__alias", "product_id"], "references": ["order_id__alias", "product_id"]},
+        ...     "omnium__orders": {"schema": "omnium", "table": "orders", "grain": ["order_id"], "grain_aliases": ["order_id__alias"], "references": ["customer_id"]},
+        ...     "omnium__customers": {"schema": "omnium", "table": "customers", "grain": ["customer_id"], "references": ["region_id"]},
+        ...     "omnium__products": {"schema": "omnium", "table": "products", "grain": ["product_id"]},
+        ...     "omnium__regions": {"schema": "omnium", "table": "regions", "grain": ["region_id"]}
+        ... }
         >>> dag = build_dag(specs)
         >>> print(build_mermaid_from_graph(dag))  # doctest: +NORMALIZE_WHITESPACE
         flowchart LR
