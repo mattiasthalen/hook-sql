@@ -234,9 +234,6 @@ def build_query(
     source_table: exp.Table,
     hooks: list[dict],
     grain: list[str],
-    time_column: str,
-    start_ts: str | None = None,
-    end_ts: str | None = None,
 ) -> exp.Expression:
     """Build the complete query with CTEs for hooks and validity tracking.
 
@@ -263,9 +260,6 @@ def build_query(
         ...     source_table=source_table,
         ...     hooks=hooks,
         ...     grain=grain,
-        ...     time_column="_record__updated_at",
-        ...     start_ts="2023-01-01 00:00:00",
-        ...     end_ts="2023-01-02 00:00:00"
         ... )
         >>> print(query.sql(pretty=True))
         WITH cte__hook AS (
@@ -306,8 +300,6 @@ def build_query(
         SELECT
           *
         FROM cte__validity
-        WHERE
-          _record__updated_at BETWEEN CAST('2023-01-01 00:00:00' AS DATETIME(6)) AND CAST('2023-01-02 00:00:00' AS DATETIME(6))
     """
 
     cte__hook = build_hook_cte(
@@ -320,14 +312,6 @@ def build_query(
         grain=grain
     )
 
-    where = parse_one("1=1", dialect="fabric")
-
-    if start_ts and end_ts:
-        where = parse_one(
-            f"{time_column} BETWEEN CAST('{start_ts}' AS DATETIME(6)) AND CAST('{end_ts}' AS DATETIME(6))",
-            dialect="fabric"
-        )
-
     query = parse_one(
         f"""
         WITH cte__hook AS (
@@ -337,7 +321,6 @@ def build_query(
         )
         SELECT *
         FROM cte__validity
-        WHERE {where.sql()}
         """,
         dialect="fabric"
     )
