@@ -4,11 +4,12 @@ from sqlglot import exp
 def build_queries(
     *,
     manifest: dict[str, dict],
-    dialect: str | None = None,
     hook_target_db: str = "silver",
     hook_target_schema: str = "hook",
     uss_target_db: str = "gold",
-    uss_target_schema: str = "uss"
+    uss_target_schema: str = "uss",
+    as_sql: bool = True,
+    dialect: str | None = None
 ) -> dict[str, dict]:
     """
     Example:
@@ -141,7 +142,7 @@ def build_queries(
         hook_query = None
 
         if spec.get("managed") is True:
-            hook_query = hook.build_hook_query(
+            hook_query_expr = hook.build_hook_query(
                 source_table=exp.Table(
                     this=spec["table"],
                     db=spec["schema"],
@@ -149,25 +150,28 @@ def build_queries(
                 ),
                 hooks=spec.get("hooks", []),
                 grain=spec.get("grain", [])
-            ).sql(dialect=dialect, pretty=True)
+            )
+            hook_query = hook_query_expr.sql(dialect=dialect, pretty=True) if as_sql else hook_query_expr
 
-        uss_bridge_query = uss.build_bridge_query(
+        uss_bridge_query_expr = uss.build_bridge_query(
             manifest=manifest,
             source_table=exp.Table(
                 this=table,
                 db=hook_target_schema,
                 catalog=hook_target_db
             )
-        ).sql(dialect=dialect, pretty=True)
+        )
+        uss_bridge_query = uss_bridge_query_expr.sql(dialect=dialect, pretty=True) if as_sql else uss_bridge_query_expr
 
-        uss_peripheral_query = uss.build_peripheral_query(
+        uss_peripheral_query_expr = uss.build_peripheral_query(
             source_table=exp.Table(
                 this=table,
                 db=hook_target_schema,
                 catalog=hook_target_db
             ),
             source_columns=spec.get("columns", []),
-        ).sql(dialect=dialect, pretty=True)
+        )
+        uss_peripheral_query = uss_peripheral_query_expr.sql(dialect=dialect, pretty=True) if as_sql else uss_peripheral_query_expr
 
         queries[table] = {
             "hook": {
