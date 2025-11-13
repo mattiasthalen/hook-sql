@@ -10,7 +10,7 @@ bootstrap:
 	$(UV) sync --dev
 
 test:
-	$(UV) run pytest
+	$(UV) run pytest -v
 
 test-coverage:
 	$(UV) run pytest --cov=src --cov-report=term-missing
