@@ -1,3 +1,5 @@
+from .manifest import build_dag, build_dag_manifest
+
 from sqlglot import exp, parse_one
 
 def build_select_clause(
@@ -345,8 +347,10 @@ def build_joins(
     expressions: list[exp.Expression] = []
 
     for right_table, condition in joins.items():
+        # Extract table name from node ID (format: schema__table)
+        table_name = right_table.split("__")[-1]
         right_table = exp.Table(
-            this=right_table,
+            this=table_name,
             db=left_table.args.get("db"),
             catalog=left_table.args.get("catalog")
         )
@@ -372,7 +376,7 @@ def build_joins(
 def build_bridge_query(
     *,
     source_table: exp.Table,
-    joins: dict,
+    manifest: dict,
 ) -> exp.Expression:
     """
     Generate SQL for bridge tables with temporal aggregations and joins.
@@ -381,8 +385,10 @@ def build_bridge_query(
 
     >>> # Simple case - single table with no joins
     >>> products = exp.Table(this='products', db='shop', catalog='sales')
-    >>> manifest = {'tables': ['products'], 'joins': {}}
-    >>> query = build_bridge_query(source_table=products, joins=manifest)
+    >>> manifest = {
+    ...     'shop__products': {'schema': 'shop', 'table': 'products', 'grain': ['product_id']}
+    ... }
+    >>> query = build_bridge_query(source_table=products, manifest=manifest)
     >>> print(query.sql(pretty=True))
     SELECT
       _record__uid AS _UID__products,
@@ -397,10 +403,11 @@ def build_bridge_query(
     >>> customers = exp.Table(this='customers', db='shop', catalog='sales')
     >>> regions = exp.Table(this='regions', db='shop', catalog='sales')
     >>> manifest = {
-    ...     'tables': ['orders', 'customers', 'regions'],
-    ...     'joins': {'customers': {'on': 'customer_id', 'joins': {'regions': 'region_id'}}}
+    ...     'shop__orders': {'schema': 'shop', 'table': 'orders', 'grain': ['order_id'], 'references': ['customer_id']},
+    ...     'shop__customers': {'schema': 'shop', 'table': 'customers', 'grain': ['customer_id'], 'references': ['region_id']},
+    ...     'shop__regions': {'schema': 'shop', 'table': 'regions', 'grain': ['region_id']}
     ... }
-    >>> query = build_bridge_query(source_table=orders, joins=manifest)
+    >>> query = build_bridge_query(source_table=orders, manifest=manifest)
     >>> print(query.sql(pretty=True))
     SELECT
       orders._record__uid AS _UID__orders,
@@ -433,11 +440,19 @@ def build_bridge_query(
       AND customers._record__valid_to > regions._record__valid_from
     """
 
-    tables = joins.get("tables", [])
-    joins_dict = joins.get("joins", {})
+    dag = build_dag(manifest)
+    full_manifest = build_dag_manifest(dag)
+    
+    # Get the node ID for the source table
+    node_id = f"{source_table.db}__{source_table.this}"
+    node_manifest = full_manifest.get(node_id, {"tables": [], "joins": {}})
 
-    # Convert string table names to exp.Table objects
-    tables = [exp.Table(this=table, db=source_table.db, catalog=source_table.catalog) for table in tables]
+    tables = node_manifest.get("tables", [])
+    joins_dict = node_manifest.get("joins", {})
+
+    # Convert string table names (node IDs) to exp.Table objects
+    # Node IDs are in format "schema__table", so we need to extract just the table name
+    tables = [exp.Table(this=table.split("__")[-1], db=source_table.db, catalog=source_table.catalog) for table in tables]
 
     # Build query components
     select_items = build_select_clause(tables)
