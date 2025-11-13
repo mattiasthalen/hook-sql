@@ -468,11 +468,11 @@ def build_bridge_query(
 def build_peripheral_query(
     *,
     source_table: exp.Table,
-    source_columns: list[dict],
+    source_columns: dict[str, str],
 ) -> exp.Expression:
 
 
-    select_columns = [exp.column(col) for col, dtype in source_columns if not col.startswith("_HK__") and col != "_record__uid"]
+    select_columns = [exp.column(col) for col, dtype in source_columns.items() if not col.startswith("_HK__") and col != "_record__uid"]
     record_uid = exp.Column(this="_record__uid", table=source_table.this).as_(f"_UID__{source_table.this}")
 
     query = (
