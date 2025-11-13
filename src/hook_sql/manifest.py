@@ -67,7 +67,7 @@ def define_table_spec(
     table: str,
     grain: str | list[str] | None = None,
     grain_aliases: list[str] | None = None,
-    columns: dict[str, str] | None = None,
+    columns: list[str] |dict[str, str] | None = None,
     hooks: list[dict] | None = None,
     events: list[dict] | None = None,
     invalidate_hard_deletes: bool = False,
@@ -77,23 +77,23 @@ def define_table_spec(
     Examples:
         # Minimal table spec with only required parameters
         >>> define_table_spec(database="default", schema="staging", table="users")
-        {'database': 'default', 'schema': 'staging', 'table': 'users', 'grain': [], 'grain_aliases': [], 'columns': {}, 'references': [], 'hooks': [], 'events': [], 'invalidate_hard_deletes': False, 'managed': True}
+        {'database': 'default', 'schema': 'staging', 'table': 'users', 'grain': [], 'grain_aliases': [], 'columns': [], 'references': [], 'hooks': [], 'events': [], 'invalidate_hard_deletes': False, 'managed': True}
 
         # Table spec with single grain column (string)
         >>> define_table_spec(database="default", schema="staging", table="products", grain="product_id")
-        {'database': 'default', 'schema': 'staging', 'table': 'products', 'grain': ['product_id'], 'grain_aliases': [], 'columns': {}, 'references': [], 'hooks': [], 'events': [], 'invalidate_hard_deletes': False, 'managed': True}
+        {'database': 'default', 'schema': 'staging', 'table': 'products', 'grain': ['product_id'], 'grain_aliases': [], 'columns': [], 'references': [], 'hooks': [], 'events': [], 'invalidate_hard_deletes': False, 'managed': True}
 
         # Table spec with composite grain (list)
         >>> define_table_spec(database="default", schema="staging", table="order_items", grain=["order_id", "item_id"])
-        {'database': 'default', 'schema': 'staging', 'table': 'order_items', 'grain': ['order_id', 'item_id'], 'grain_aliases': [], 'columns': {}, 'references': [], 'hooks': [], 'events': [], 'invalidate_hard_deletes': False, 'managed': True}
+        {'database': 'default', 'schema': 'staging', 'table': 'order_items', 'grain': ['order_id', 'item_id'], 'grain_aliases': [], 'columns': [], 'references': [], 'hooks': [], 'events': [], 'invalidate_hard_deletes': False, 'managed': True}
         
         # Table spec with invalidate_hard_deletes enabled
         >>> define_table_spec(database="default", schema="production", table="customers", invalidate_hard_deletes=True)
-        {'database': 'default', 'schema': 'production', 'table': 'customers', 'grain': [], 'grain_aliases': [], 'columns': {}, 'references': [], 'hooks': [], 'events': [], 'invalidate_hard_deletes': True, 'managed': True}
+        {'database': 'default', 'schema': 'production', 'table': 'customers', 'grain': [], 'grain_aliases': [], 'columns': [], 'references': [], 'hooks': [], 'events': [], 'invalidate_hard_deletes': True, 'managed': True}
 
         # Table spec with managed disabled
         >>> define_table_spec(database="default", schema="raw", table="logs", managed=False)
-        {'database': 'default', 'schema': 'raw', 'table': 'logs', 'grain': [], 'grain_aliases': [], 'columns': {}, 'references': [], 'hooks': [], 'events': [], 'invalidate_hard_deletes': False, 'managed': False}
+        {'database': 'default', 'schema': 'raw', 'table': 'logs', 'grain': [], 'grain_aliases': [], 'columns': [], 'references': [], 'hooks': [], 'events': [], 'invalidate_hard_deletes': False, 'managed': False}
         
         # Table spec with single hook, no qualifier
         >>> define_table_spec(
@@ -107,7 +107,7 @@ def define_table_spec(
         ...         "expression": "id",
         ...     }]
         ... )
-        {'database': 'default', 'schema': 'analytics', 'table': 'events', 'grain': [], 'grain_aliases': [], 'columns': {}, 'references': ['_HK__event'], 'hooks': [{'name': '_HK__event', 'concept': 'event', 'qualifier': None, 'keyset': 'event_id', 'expression': 'id'}], 'events': [], 'invalidate_hard_deletes': False, 'managed': True}
+        {'database': 'default', 'schema': 'analytics', 'table': 'events', 'grain': [], 'grain_aliases': [], 'columns': [], 'references': ['_HK__event'], 'hooks': [{'name': '_HK__event', 'concept': 'event', 'qualifier': None, 'keyset': 'event_id', 'expression': 'id'}], 'events': [], 'invalidate_hard_deletes': False, 'managed': True}
 
         # Complete table spec with all parameters
         >>> define_table_spec(
@@ -133,7 +133,7 @@ def define_table_spec(
         ...     invalidate_hard_deletes=True,
         ...     managed=False
         ... )
-        {'database': 'default', 'schema': 'omnium', 'table': 'orders', 'grain': ['order_id'], 'grain_aliases': [], 'columns': {}, 'references': ['_HK__order', '_HK__customer__external'], 'hooks': [{'name': '_HK__order', 'concept': 'order', 'qualifier': None, 'keyset': 'order_id', 'expression': 1}, {'name': '_HK__customer__external', 'concept': 'customer', 'qualifier': 'external', 'keyset': 'customer_id', 'expression': 1}], 'events': [], 'invalidate_hard_deletes': True, 'managed': False}
+        {'database': 'default', 'schema': 'omnium', 'table': 'orders', 'grain': ['order_id'], 'grain_aliases': [], 'columns': [], 'references': ['_HK__order', '_HK__customer__external'], 'hooks': [{'name': '_HK__order', 'concept': 'order', 'qualifier': None, 'keyset': 'order_id', 'expression': 1}, {'name': '_HK__customer__external', 'concept': 'customer', 'qualifier': 'external', 'keyset': 'customer_id', 'expression': 1}], 'events': [], 'invalidate_hard_deletes': True, 'managed': False}
 
         # Table spec with composite grain (list)
         >>> define_table_spec(
@@ -158,7 +158,7 @@ def define_table_spec(
         ...     invalidate_hard_deletes=True,
         ...     managed=False
         ... )
-        {'database': 'default', 'schema': 'omnium', 'table': 'orders', 'grain': ['_HK__order', '_HK__product'], 'grain_aliases': [], 'columns': {}, 'references': ['_HK__order', '_HK__product'], 'hooks': [{'name': '_HK__order', 'concept': 'order', 'qualifier': None, 'keyset': 'order_id', 'expression': 1}, {'name': '_HK__product', 'concept': 'product', 'qualifier': None, 'keyset': 'product_id', 'expression': 1}], 'events': [], 'invalidate_hard_deletes': True, 'managed': False}
+        {'database': 'default', 'schema': 'omnium', 'table': 'orders', 'grain': ['_HK__order', '_HK__product'], 'grain_aliases': [], 'columns': [], 'references': ['_HK__order', '_HK__product'], 'hooks': [{'name': '_HK__order', 'concept': 'order', 'qualifier': None, 'keyset': 'order_id', 'expression': 1}, {'name': '_HK__product', 'concept': 'product', 'qualifier': None, 'keyset': 'product_id', 'expression': 1}], 'events': [], 'invalidate_hard_deletes': True, 'managed': False}
 
         # Table spec with grain and hard deletes but no hooks
         >>> define_table_spec(
@@ -180,7 +180,7 @@ def define_table_spec(
         ...     ],
         ...     invalidate_hard_deletes=True
         ... )
-        {'database': 'default', 'schema': 'warehouse', 'table': 'inventory', 'grain': ['inventory_id'], 'grain_aliases': [], 'columns': {}, 'references': [], 'hooks': [], 'events': [{'name': 'inventory updated', 'expression': 'updated_at', 'measures': [{'name': 'measure__inventory_updated', 'expression': 1}]}], 'invalidate_hard_deletes': True, 'managed': True}
+        {'database': 'default', 'schema': 'warehouse', 'table': 'inventory', 'grain': ['inventory_id'], 'grain_aliases': [], 'columns': [], 'references': [], 'hooks': [], 'events': [{'name': 'inventory updated', 'expression': 'updated_at', 'measures': [{'name': 'measure__inventory_updated', 'expression': 1}]}], 'invalidate_hard_deletes': True, 'managed': True}
 
         # Table spec with grain aliases
         >>> define_table_spec(
@@ -191,7 +191,7 @@ def define_table_spec(
         ...     grain_aliases=["inventory_id_alias"],
         ...     invalidate_hard_deletes=True
         ... )
-        {'database': 'default', 'schema': 'warehouse', 'table': 'inventory', 'grain': ['inventory_id'], 'grain_aliases': ['inventory_id_alias'], 'columns': {}, 'references': [], 'hooks': [], 'events': [], 'invalidate_hard_deletes': True, 'managed': True}
+        {'database': 'default', 'schema': 'warehouse', 'table': 'inventory', 'grain': ['inventory_id'], 'grain_aliases': ['inventory_id_alias'], 'columns': [], 'references': [], 'hooks': [], 'events': [], 'invalidate_hard_deletes': True, 'managed': True}
     """
     if grain is None:
         grain = []
@@ -200,7 +200,7 @@ def define_table_spec(
         grain_aliases = []
 
     if columns is None:
-        columns = {}
+        columns = []
 
     if isinstance(grain, str):
         grain = [grain]
