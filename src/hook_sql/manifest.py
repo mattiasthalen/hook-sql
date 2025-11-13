@@ -426,7 +426,7 @@ def build_dag_manifest(G: nx.DiGraph) -> dict[str, dict]:
 
 
         # Build nested joins structure using iterative approach with stack
-        nested_joins = {}
+        nested_joins: dict = {}
         
         # Use a stack to build nested joins iteratively
         # Each item in stack is (current_node, current_dict_ref)
