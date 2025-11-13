@@ -346,11 +346,11 @@ def build_joins(
     """
     expressions: list[exp.Expression] = []
 
-    for right_table, condition in joins.items():
-        # Extract table name from node ID (format: schema__table)
-        table_name = right_table.split("__")[-1]
+    for right_table_id, condition in joins.items():
+        # The right_table_id is the node ID which is the actual table name
+        # (e.g., "northwind__customers")
         right_table = exp.Table(
-            this=table_name,
+            this=right_table_id,
             db=left_table.args.get("db"),
             catalog=left_table.args.get("catalog")
         )
@@ -384,24 +384,22 @@ def build_bridge_query(
     Orchestrates the SELECT, JOIN, and WHERE clause generation by calling helper functions.
 
     >>> # Simple case - single table with no joins
-    >>> products = exp.Table(this='products', db='shop', catalog='sales')
+    >>> products = exp.Table(this='shop__products', db='hook', catalog='silver')
     >>> manifest = {
     ...     'shop__products': {'schema': 'shop', 'table': 'products', 'grain': ['product_id']}
     ... }
     >>> query = build_bridge_query(source_table=products, manifest=manifest)
     >>> print(query.sql(pretty=True))
     SELECT
-      _record__uid AS _UID__products,
+      _record__uid AS _UID__shop__products,
       _record__valid_from,
       _record__valid_to,
       _record__updated_at,
       _record__is_current
-    FROM sales.shop.products
+    FROM silver.hook.shop__products
 
     >>> # Complex case - multi-table with joins and temporal aggregations
-    >>> orders = exp.Table(this='orders', db='shop', catalog='sales')
-    >>> customers = exp.Table(this='customers', db='shop', catalog='sales')
-    >>> regions = exp.Table(this='regions', db='shop', catalog='sales')
+    >>> orders = exp.Table(this='shop__orders', db='hook', catalog='silver')
     >>> manifest = {
     ...     'shop__orders': {'schema': 'shop', 'table': 'orders', 'grain': ['order_id'], 'references': ['customer_id']},
     ...     'shop__customers': {'schema': 'shop', 'table': 'customers', 'grain': ['customer_id'], 'references': ['region_id']},
@@ -410,49 +408,58 @@ def build_bridge_query(
     >>> query = build_bridge_query(source_table=orders, manifest=manifest)
     >>> print(query.sql(pretty=True))
     SELECT
-      orders._record__uid AS _UID__orders,
-      customers._record__uid AS _UID__customers,
-      regions._record__uid AS _UID__regions,
+      shop__orders._record__uid AS _UID__shop__orders,
+      shop__customers._record__uid AS _UID__shop__customers,
+      shop__regions._record__uid AS _UID__shop__regions,
       GREATEST(
-        orders._record__valid_from,
-        customers._record__valid_from,
-        regions._record__valid_from
+        shop__orders._record__valid_from,
+        shop__customers._record__valid_from,
+        shop__regions._record__valid_from
       ) AS _record__valid_from,
-      LEAST(orders._record__valid_to, customers._record__valid_to, regions._record__valid_to) AS _record__valid_to,
+      LEAST(
+        shop__orders._record__valid_to,
+        shop__customers._record__valid_to,
+        shop__regions._record__valid_to
+      ) AS _record__valid_to,
       GREATEST(
-        orders._record__updated_at,
-        customers._record__updated_at,
-        regions._record__updated_at
+        shop__orders._record__updated_at,
+        shop__customers._record__updated_at,
+        shop__regions._record__updated_at
       ) AS _record__updated_at,
       LEAST(
-        orders._record__is_current,
-        customers._record__is_current,
-        regions._record__is_current
+        shop__orders._record__is_current,
+        shop__customers._record__is_current,
+        shop__regions._record__is_current
       ) AS _record__is_current
-    FROM sales.shop.orders
-    LEFT JOIN sales.shop.customers
-      ON orders.customer_id = customers.customer_id
-      AND orders._record__valid_from < customers._record__valid_to
-      AND orders._record__valid_to > customers._record__valid_from
-    LEFT JOIN sales.shop.regions
-      ON customers.region_id = regions.region_id
-      AND customers._record__valid_from < regions._record__valid_to
-      AND customers._record__valid_to > regions._record__valid_from
+    FROM silver.hook.shop__orders
+    LEFT JOIN silver.hook.shop__customers
+      ON shop__orders.customer_id = shop__customers.customer_id
+      AND shop__orders._record__valid_from < shop__customers._record__valid_to
+      AND shop__orders._record__valid_to > shop__customers._record__valid_from
+    LEFT JOIN silver.hook.shop__regions
+      ON shop__customers.region_id = shop__regions.region_id
+      AND shop__customers._record__valid_from < shop__regions._record__valid_to
+      AND shop__customers._record__valid_to > shop__regions._record__valid_from
     """
 
     dag = build_dag(manifest)
     full_manifest = build_dag_manifest(dag)
     
-    # Get the node ID for the source table
-    node_id = f"{source_table.db}__{source_table.this}"
+    # The source table name is the node ID in the manifest
+    # (e.g., "northwind__orders" which is schema__table from the original source)
+    node_id = source_table.this
     node_manifest = full_manifest.get(node_id, {"tables": [], "joins": {}})
 
     tables = node_manifest.get("tables", [])
     joins_dict = node_manifest.get("joins", {})
 
     # Convert string table names (node IDs) to exp.Table objects
-    # Node IDs are in format "schema__table", so we need to extract just the table name
-    tables = [exp.Table(this=table.split("__")[-1], db=source_table.db, catalog=source_table.catalog) for table in tables]
+    # Node IDs are the actual table names (e.g., "northwind__orders")
+    tables = [exp.Table(this=table, db=source_table.db, catalog=source_table.catalog) for table in tables]
+    
+    # If no tables found (single table with no joins), use the source table
+    if not tables:
+        tables = [source_table]
 
     # Build query components
     select_items = build_select_clause(tables)
