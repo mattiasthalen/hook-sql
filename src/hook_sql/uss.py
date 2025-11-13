@@ -5,7 +5,7 @@ def build_select_clause(
 ) -> list[exp.Expression]:
     """
     Build the SELECT clause with keys and temporal fields.
-    
+
     >>> keys = ['order_id', 'customer_id']
     >>> orders_table = exp.Table(this='orders')
     >>> customers_table = exp.Table(this='customers')
@@ -20,7 +20,7 @@ def build_select_clause(
       LEAST(orders._record__valid_to, customers._record__valid_to) AS _record__valid_to,
       GREATEST(orders._record__updated_at, customers._record__updated_at) AS _record__updated_at,
       LEAST(orders._record__is_current, customers._record__is_current) AS _record__is_current
-    
+
     >>> # Single table should not have aggregations
     >>> products_table = exp.Table(this='products')
     >>> select_single = build_select_clause([products_table])
@@ -34,7 +34,7 @@ def build_select_clause(
       _record__is_current
     """
     select_items: list[exp.Expression] = []
-    
+
     # Add key columns
     if len(tables) == 1:
         # Single table - direct key selection
@@ -44,10 +44,10 @@ def build_select_clause(
         # Multiple tables - qualified key selection with aliases
         for table in tables:
             select_items.append(exp.Column(this="_record__uid", table=table.this).as_(f"_UID__{table.this}"))
-    
+
     # Add temporal fields
     select_items.extend(build_temporal_fields(tables))
-    
+
     return select_items
 
 
@@ -56,7 +56,7 @@ def build_temporal_fields(
 ) -> list[exp.Expression]:
     """
     Build temporal field expressions - aggregated for multiple tables, direct for single table.
-    
+
     >>> # Single table - direct fields
     >>> orders_table = exp.Table(this='orders')
     >>> fields_single = build_temporal_fields([orders_table])
@@ -67,10 +67,10 @@ def build_temporal_fields(
       _record__valid_to,
       _record__updated_at,
       _record__is_current
-    
+
     >>> # Multiple tables - aggregated fields
     >>> customers_table = exp.Table(this='customers')
-    >>> fields_multi = build_temporal_fields([orders_table, customers_table]) 
+    >>> fields_multi = build_temporal_fields([orders_table, customers_table])
     >>> query = exp.select(*fields_multi)
     >>> print(query.sql(pretty=True))
     SELECT
@@ -80,12 +80,12 @@ def build_temporal_fields(
       LEAST(orders._record__is_current, customers._record__is_current) AS _record__is_current
     """
     temporal_fields = []
-    
+
     if len(tables) > 1:
         temporal_fields.extend(build_temporal_aggregations(tables))
     else:
         temporal_fields.extend(build_direct_temporal_fields())
-    
+
     return temporal_fields
 
 
@@ -94,7 +94,7 @@ def build_temporal_aggregations(
 ) -> list[exp.Expression]:
     """
     Build temporal aggregation expressions for multiple tables.
-    
+
     >>> orders_table = exp.Table(this='orders')
     >>> customers_table = exp.Table(this='customers')
     >>> regions_table = exp.Table(this='regions')
@@ -126,24 +126,24 @@ def build_temporal_aggregations(
         "_record__updated_at": "GREATEST",
         "_record__is_current": "LEAST"
     }
-    
+
     expressions: list[exp.Expression] = []
     for field, agg_func in temporal_aggregations.items():
         table_columns = [exp.Column(this=field, table=table.this) for table in tables]
-        
+
         aggregation = exp.Alias(
             this=exp.func(agg_func, *table_columns),
             alias=field
         )
         expressions.append(aggregation)
-    
+
     return expressions
 
 
 def build_direct_temporal_fields() -> list[exp.Expression]:
     """
     Build direct temporal field selections for single tables.
-    
+
     >>> fields = build_direct_temporal_fields()
     >>> query = exp.select(*fields)
     >>> print(query.sql(pretty=True))
@@ -154,12 +154,12 @@ def build_direct_temporal_fields() -> list[exp.Expression]:
       _record__is_current
     """
     temporal_field_names = [
-        "_record__valid_from", 
-        "_record__valid_to", 
-        "_record__updated_at", 
+        "_record__valid_from",
+        "_record__valid_to",
+        "_record__updated_at",
         "_record__is_current"
     ]
-    
+
     return [exp.Column(this=field) for field in temporal_field_names]
 
 
@@ -170,18 +170,18 @@ def build_where_clause(
 ) -> exp.Expression | None:
     """
     Build WHERE clause - now returns None since temporal conditions are in JOIN clauses.
-    
+
     >>> # No joins - should return None
     >>> orders_table = exp.Table(this='orders')
     >>> where_none = build_where_clause(orders_table, [orders_table], False)
     >>> where_none is None
     True
-    
-    >>> # Single table - should return None  
+
+    >>> # Single table - should return None
     >>> where_single = build_where_clause(orders_table, [orders_table], True)
     >>> where_single is None
     True
-    
+
     >>> # Multiple tables with joins - should return None (temporal conditions moved to JOINs)
     >>> customers_table = exp.Table(this='customers')
     >>> where_multi = build_where_clause(orders_table, [orders_table, customers_table], True)
@@ -198,7 +198,7 @@ def build_temporal_overlap_conditions(
 ) -> list[exp.Expression]:
     """
     Build temporal overlap conditions between two tables.
-    
+
     >>> orders_table = exp.Table(this='orders')
     >>> customers_table = exp.Table(this='customers')
     >>> conditions = build_temporal_overlap_conditions(orders_table, customers_table)
@@ -231,7 +231,7 @@ def build_time_range_condition(
 ) -> exp.Expression:
     """
     Build a time range condition using BETWEEN with DATETIME(6) casting.
-    
+
     >>> condition = build_time_range_condition("_record__updated_at", "2024-01-01 00:00:00", "2024-12-31 23:59:59")
     >>> query = exp.select("*").from_("orders").where(condition)
     >>> print(query.sql(pretty=True, dialect="fabric"))
@@ -242,7 +242,7 @@ def build_time_range_condition(
       _record__updated_at BETWEEN CAST('2024-01-01 00:00:00' AS DATETIME2(6)) AND CAST('2024-12-31 23:59:59' AS DATETIME2(6))
     """
     return parse_one(
-        f"{time_column} BETWEEN CAST('{start_ts}' AS DATETIME(6)) AND CAST('{end_ts}' AS DATETIME(6))", 
+        f"{time_column} BETWEEN CAST('{start_ts}' AS DATETIME(6)) AND CAST('{end_ts}' AS DATETIME(6))",
         dialect="fabric"
     )
 
@@ -254,7 +254,7 @@ def create_join_expression(
 ) -> exp.Join:
     """
     Create a LEFT JOIN expression between two tables on a specific column with temporal overlap conditions.
-    
+
     >>> orders_table = exp.Table(this='orders')
     >>> customers_table = exp.Table(this='customers')
     >>> join_expr = create_join_expression(orders_table, customers_table, 'customer_id')
@@ -279,10 +279,10 @@ def create_join_expression(
             table=right_table.this
         ),
     )
-    
+
     # Add temporal overlap conditions
     temporal_conditions = build_temporal_overlap_conditions(left_table, right_table)
-    
+
     # Combine all conditions with AND
     combined_condition = exp.and_(join_condition, *temporal_conditions)
 
@@ -299,7 +299,7 @@ def build_joins(
 ) -> list[exp.Expression]:
     """
     Build JOIN expressions recursively from the joins manifest with temporal overlap conditions.
-    
+
     >>> # Simple join
     >>> orders_table = exp.Table(this='orders')
     >>> simple_joins = {'customers': 'customer_id'}
@@ -315,7 +315,7 @@ def build_joins(
       ON orders.customer_id = customers.customer_id
       AND orders._record__valid_from < customers._record__valid_to
       AND orders._record__valid_to > customers._record__valid_from
-    
+
     >>> # Complex nested joins
     >>> complex_joins = {
     ...     'customers': {
@@ -355,10 +355,10 @@ def build_joins(
             # Complex join with nested joins
             join_column = condition["on"]
             nested_joins = condition.get("joins", {})
-            
+
             # Add the join for this table
             expressions.append(create_join_expression(left_table, right_table, join_column))
-            
+
             # Recursively add nested joins
             if nested_joins:
                 expressions.extend(build_joins(right_table, nested_joins))
@@ -369,23 +369,20 @@ def build_joins(
     return expressions
 
 
-def build_query(
+def build_bridge_query(
     *,
     source_table: exp.Table,
     joins: dict,
-    time_column: str = "_record__updated_at",
-    start_ts: str | None = None,
-    end_ts: str | None = None
 ) -> exp.Expression:
     """
     Generate SQL for bridge tables with temporal aggregations and joins.
-    
+
     Orchestrates the SELECT, JOIN, and WHERE clause generation by calling helper functions.
-    
+
     >>> # Simple case - single table with no joins
     >>> products = exp.Table(this='products', db='shop', catalog='sales')
     >>> manifest = {'tables': ['products'], 'joins': {}}
-    >>> query = build_query(source_table=products, joins=manifest, start_ts=None, end_ts=None)
+    >>> query = build_bridge_query(source_table=products, joins=manifest)
     >>> print(query.sql(pretty=True))
     SELECT
       _record__uid AS _UID__products,
@@ -394,16 +391,16 @@ def build_query(
       _record__updated_at,
       _record__is_current
     FROM sales.shop.products
-    
+
     >>> # Complex case - multi-table with joins and temporal aggregations
     >>> orders = exp.Table(this='orders', db='shop', catalog='sales')
     >>> customers = exp.Table(this='customers', db='shop', catalog='sales')
     >>> regions = exp.Table(this='regions', db='shop', catalog='sales')
     >>> manifest = {
-    ...     'tables': ['orders', 'customers', 'regions'], 
+    ...     'tables': ['orders', 'customers', 'regions'],
     ...     'joins': {'customers': {'on': 'customer_id', 'joins': {'regions': 'region_id'}}}
     ... }
-    >>> query = build_query(source_table=orders, joins=manifest, start_ts='2024-03-15 12:00:00', end_ts='2024-03-15 18:00:00')
+    >>> query = build_bridge_query(source_table=orders, joins=manifest)
     >>> print(query.sql(pretty=True))
     SELECT
       orders._record__uid AS _UID__orders,
@@ -434,8 +431,6 @@ def build_query(
       ON customers.region_id = regions.region_id
       AND customers._record__valid_from < regions._record__valid_to
       AND customers._record__valid_to > regions._record__valid_from
-    WHERE
-      _record__updated_at BETWEEN CAST('2024-03-15 12:00:00' AS DATETIME(6)) AND CAST('2024-03-15 18:00:00' AS DATETIME(6))
     """
 
     tables = joins.get("tables", [])
@@ -447,27 +442,30 @@ def build_query(
     # Build query components
     select_items = build_select_clause(tables)
     query = exp.select(*select_items).from_(source_table)
-    
+
     # Add joins
     if joins_dict:
         for join in build_joins(source_table, joins_dict):
             query = query.join(join)
-    
-    # Add WHERE clause
-    where_clause = build_where_clause(source_table, tables, bool(joins_dict))
-    
-    # Add time range filter if provided
-    if start_ts is not None and end_ts is not None:
-        time_range_condition = build_time_range_condition(time_column, start_ts, end_ts)
-        if where_clause:
-            # Combine with existing WHERE clause
-            where_clause = exp.and_(where_clause, time_range_condition)
-        else:
-            # Use time range as the WHERE clause
-            where_clause = time_range_condition
-    
-    # Apply the final WHERE clause
-    if where_clause:
-        query = query.where(where_clause)
+
+    return query
+
+def build_peripheral_query(
+    *,
+    source_table: exp.Table,
+    source_columns: list[dict],
+) -> exp.Expression:
+
+
+    select_columns = [exp.column(col) for col, dtype in source_columns if not col.startswith("_HK__") and col != "_record__uid"]
+    record_uid = exp.Column(this="_record__uid", table=source_table.this).as_(f"_UID__{source_table.this}")
+
+    query = (
+        exp.select(
+            record_uid,
+            *select_columns,
+        )
+        .from_(source_table)
+    )
 
     return query

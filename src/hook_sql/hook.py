@@ -229,7 +229,7 @@ def build_validity_cte(
 
     return sql
 
-def build_query(
+def build_hook_query(
     *,
     source_table: exp.Table,
     hooks: list[dict],
@@ -256,7 +256,7 @@ def build_query(
         >>> source_table = exp.Table(this="test_table", db="test_schema")
         >>> hooks = [{"name": "hook1", "keyset": "key1", "expression": "col1"}]
         >>> grain = ["id"]
-        >>> query = build_query(
+        >>> query = build_hook_query(
         ...     source_table=source_table,
         ...     hooks=hooks,
         ...     grain=grain,
