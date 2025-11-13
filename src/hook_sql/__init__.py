@@ -1,5 +1,10 @@
 from . import manifest
+from . import hook
+from . import uss
+
 
 __all__ = [
-    "manifest"
+    "manifest",
+    "hook",
+    "uss"
 ]
