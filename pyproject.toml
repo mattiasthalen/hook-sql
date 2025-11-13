@@ -7,8 +7,22 @@ authors = [
     { name = "Mattias Thalén", email = "bitter-polders0x@icloud.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "networkx>=3.5",
+    "sqlglot>=27.29.0",
+]
 
 [build-system]
 requires = ["uv_build>=0.9.9,<0.10.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.18.2",
+    "pytest>=9.0.1",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.14.5",
+]
+
+[tool.pytest.ini_options]
+addopts = "-q --doctest-modules --doctest-glob=*.py --doctest-report=udiff"
