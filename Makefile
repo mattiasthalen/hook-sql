@@ -4,10 +4,13 @@ UV_LINK_MODE ?= copy
 
 export UV_LINK_MODE
 
-.PHONY: bootstrap test test-coverage ruff mypy
+.PHONY: bootstrap install-pre-commit test test-coverage ruff mypy full-check
 
 bootstrap:
 	$(UV) sync --dev
+
+install-pre-commit:
+	$(UV) run pre-commit install
 
 test:
 	$(UV) run pytest -v
