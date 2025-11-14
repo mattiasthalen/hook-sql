@@ -55,7 +55,8 @@ def create_export_directories(base_path: Path) -> dict[str, Path]:
 def export_queries(
     queries: dict[str, dict],
     export_path: Path,
-    dialect: str | None = None
+    dialect: str | None = None,
+    identify: bool = True
 ) -> None:
     """Export queries to SQL files in organized directories.
     
@@ -87,7 +88,7 @@ def export_queries(
             if query is not None:
                 # Convert to SQL string if it's an expression
                 if isinstance(query, exp.Expression):
-                    query = query.sql(dialect=dialect, pretty=True)
+                    query = query.sql(dialect=dialect, pretty=True, identify=identify)
                 target_dir = directories[query_type]
                 file_path = target_dir / f"{table}.sql"
                 write_query_file(file_path, query)
@@ -102,7 +103,8 @@ def build_queries(
     uss_target_schema: str = "uss",
     as_sql: bool = True,
     dialect: str | None = None,
-    export_path: str | Path | None = None
+    export_path: str | Path | None = None,
+    identify: bool = True
 ) -> dict[str, dict]:
     """
     Example:
@@ -237,34 +239,34 @@ def build_queries(
         if spec.get("managed") is True:
             hook_query_expr = hook.build_hook_query(
                 source_table=exp.Table(
-                    this=spec["table"],
-                    db=spec["schema"],
-                    catalog=spec["database"]
+                    this=exp.to_identifier(spec["table"]),
+                    db=exp.to_identifier(spec["schema"]),
+                    catalog=exp.to_identifier(spec["database"])
                 ),
                 hooks=spec.get("hooks", []),
                 grain=spec.get("grain", [])
             )
-            hook_query = hook_query_expr.sql(dialect=dialect, pretty=True) if as_sql else hook_query_expr
+            hook_query = hook_query_expr.sql(dialect=dialect, pretty=True, identify=identify) if as_sql else hook_query_expr
 
         uss_bridge_query_expr = uss.build_bridge_query(
             manifest=manifest,
             source_table=exp.Table(
-                this=table,
-                db=hook_target_schema,
-                catalog=hook_target_db
+                this=exp.to_identifier(table),
+                db=exp.to_identifier(hook_target_schema),
+                catalog=exp.to_identifier(hook_target_db)
             )
         )
-        uss_bridge_query = uss_bridge_query_expr.sql(dialect=dialect, pretty=True) if as_sql else uss_bridge_query_expr
+        uss_bridge_query = uss_bridge_query_expr.sql(dialect=dialect, pretty=True, identify=identify) if as_sql else uss_bridge_query_expr
 
         uss_peripheral_query_expr = uss.build_peripheral_query(
             source_table=exp.Table(
-                this=table,
-                db=hook_target_schema,
-                catalog=hook_target_db
+                this=exp.to_identifier(table),
+                db=exp.to_identifier(hook_target_schema),
+                catalog=exp.to_identifier(hook_target_db)
             ),
             source_columns=spec.get("columns", []),
         )
-        uss_peripheral_query = uss_peripheral_query_expr.sql(dialect=dialect, pretty=True) if as_sql else uss_peripheral_query_expr
+        uss_peripheral_query = uss_peripheral_query_expr.sql(dialect=dialect, pretty=True, identify=identify) if as_sql else uss_peripheral_query_expr
 
         queries[table] = {
             "hook": {
@@ -288,6 +290,6 @@ def build_queries(
         }
 
     if export_path is not None:
-        export_queries(queries, Path(export_path), dialect=dialect)
+        export_queries(queries, Path(export_path), dialect=dialect, identify=identify)
 
     return queries

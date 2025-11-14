@@ -160,13 +160,13 @@ def build_validity_cte(
 
     # Build grain column expressions for PARTITION BY
     partition_by = [exp.to_column(col) for col in grain]
-    order_by_col = exp.Column(this="_record__loaded_at")
+    order_by_col = exp.column("_record__loaded_at")
 
     # COALESCE(LAG(_record__loaded_at) OVER (...), CAST('1970-01-01 00:00:00' AS DATETIME(6)))
     record_valid_from = exp.alias_(
         exp.Coalesce(
             this=exp.Window(
-                this=exp.Lag(this=exp.Column(this="_record__loaded_at")),
+                this=exp.Lag(this=exp.column("_record__loaded_at")),
                 partition_by=partition_by.copy() if partition_by else None,
                 order=exp.Order(expressions=[order_by_col.copy()])
             ),
@@ -184,10 +184,10 @@ def build_validity_cte(
     record_valid_to = exp.alias_(
         exp.Coalesce(
             this=exp.Least(
-                this=exp.Column(this="_record__hash_removed_at"),
+                this=exp.column("_record__hash_removed_at"),
                 expressions=[
                     exp.Window(
-                        this=exp.Lead(this=exp.Column(this="_record__loaded_at")),
+                        this=exp.Lead(this=exp.column("_record__loaded_at")),
                         partition_by=partition_by.copy() if partition_by else None,
                         order=exp.Order(expressions=[order_by_col.copy()])
                     )
@@ -220,7 +220,7 @@ def build_validity_cte(
                 exp.If(
                     this=exp.Is(
                         this=exp.Window(
-                            this=exp.Lead(this=exp.Column(this="_record__loaded_at")),
+                            this=exp.Lead(this=exp.column("_record__loaded_at")),
                             partition_by=partition_by.copy() if partition_by else None,
                             order=exp.Order(expressions=[order_by_col.copy()])
                         ),
@@ -238,16 +238,16 @@ def build_validity_cte(
     record_updated_at = exp.alias_(
         exp.Coalesce(
             this=exp.Least(
-                this=exp.Column(this="_record__hash_removed_at"),
+                this=exp.column("_record__hash_removed_at"),
                 expressions=[
                     exp.Window(
-                        this=exp.Lead(this=exp.Column(this="_record__loaded_at")),
+                        this=exp.Lead(this=exp.column("_record__loaded_at")),
                         partition_by=partition_by.copy() if partition_by else None,
                         order=exp.Order(expressions=[order_by_col.copy()])
                     )
                 ]
             ),
-            expressions=[exp.Column(this="_record__loaded_at")]
+            expressions=[exp.column("_record__loaded_at")]
         ),
         "_record__updated_at"
     )
@@ -264,7 +264,7 @@ def build_validity_cte(
         )
     concat_cols.append(
         exp.Coalesce(
-            this=exp.Column(this="_record__loaded_at"),
+            this=exp.column("_record__loaded_at"),
             expressions=[exp.Literal.string("")]
         )
     )
@@ -365,24 +365,16 @@ def build_hook_query(
     )
 
     cte__validity = build_validity_cte(
-        from_table=exp.Table(this="cte__hook"),
+        from_table=exp.table_("cte__hook"),
         grain=grain
     )
 
     # Build the query with CTEs using pure SQLGlot expressions
     query = (
         exp.select(exp.Star())
-        .from_("cte__validity")
-        .with_(
-            "cte__hook",
-            cte__hook,
-            dialect="fabric"
-        )
-        .with_(
-            "cte__validity",
-            cte__validity,
-            dialect="fabric"
-        )
+        .from_(exp.table_("cte__validity"))
+        .with_("cte__hook", cte__hook)
+        .with_("cte__validity", cte__validity)
     )
 
     return query

@@ -41,11 +41,11 @@ def build_select_clause(
     if len(tables) == 1:
         # Single table - direct key selection
         table = tables[0]
-        select_items.append(exp.Column(this="_record__uid").as_(f"_UID__{table.this}"))
+        select_items.append(exp.column("_record__uid").as_(f"_UID__{table.this}"))
     else:
         # Multiple tables - qualified key selection with aliases
         for table in tables:
-            select_items.append(exp.Column(this="_record__uid", table=table.this).as_(f"_UID__{table.this}"))
+            select_items.append(exp.column("_record__uid", table=table.this).as_(f"_UID__{table.this}"))
 
     # Add temporal fields
     select_items.extend(build_temporal_fields(tables))
@@ -131,7 +131,7 @@ def build_temporal_aggregations(
 
     expressions: list[exp.Expression] = []
     for field, agg_func in temporal_aggregations.items():
-        table_columns = [exp.Column(this=field, table=table.this) for table in tables]
+        table_columns = [exp.column(field, table=table.this) for table in tables]
 
         aggregation = exp.Alias(
             this=exp.func(agg_func, *table_columns),
@@ -162,7 +162,7 @@ def build_direct_temporal_fields() -> list[exp.Expression]:
         "_record__is_current"
     ]
 
-    return [exp.Column(this=field) for field in temporal_field_names]
+    return [exp.column(field) for field in temporal_field_names]
 
 
 def build_temporal_overlap_conditions(
@@ -187,12 +187,12 @@ def build_temporal_overlap_conditions(
     """
     return [
         exp.LT(
-            this=exp.Column(this="_record__valid_from", table=main_table.this),
-            expression=exp.Column(this="_record__valid_to", table=joined_table.this)
+            this=exp.column("_record__valid_from", table=main_table.this),
+            expression=exp.column("_record__valid_to", table=joined_table.this)
         ),
         exp.GT(
-            this=exp.Column(this="_record__valid_to", table=main_table.this),
-            expression=exp.Column(this="_record__valid_from", table=joined_table.this)
+            this=exp.column("_record__valid_to", table=main_table.this),
+            expression=exp.column("_record__valid_from", table=joined_table.this)
         )
     ]
 
@@ -220,14 +220,8 @@ def create_join_expression(
     """
     # Build the join column equality condition
     join_condition = exp.EQ(
-        this=exp.Column(
-            this=join_column,
-            table=left_table.this
-        ),
-        expression=exp.Column(
-            this=join_column,
-            table=right_table.this
-        ),
+        this=exp.column(join_column, table=left_table.this),
+        expression=exp.column(join_column, table=right_table.this),
     )
 
     # Add temporal overlap conditions
@@ -298,7 +292,7 @@ def build_joins(
         # The right_table_id is the node ID which is the actual table name
         # (e.g., "northwind__customers")
         right_table = exp.Table(
-            this=right_table_id,
+            this=exp.to_identifier(right_table_id),
             db=left_table.args.get("db"),
             catalog=left_table.args.get("catalog")
         )
@@ -428,7 +422,7 @@ def build_peripheral_query(
 
 
     select_columns = [exp.column(col) for col, dtype in source_columns.items() if not col.startswith("_HK__") and col != "_record__uid"]
-    record_uid = exp.Column(this="_record__uid", table=source_table.this).as_(f"_UID__{source_table.this}")
+    record_uid = exp.column("_record__uid", table=source_table.this).as_(f"_UID__{source_table.this}")
 
     query = (
         exp.select(
