@@ -4,7 +4,7 @@ repos:
       - id: make-full-check
         name: Run make full-check
         entry: make
-        args: ["full-check"]
+        args: ["full-check", "clean"]
         language: system
         pass_filenames: false
         stages: [pre-commit]

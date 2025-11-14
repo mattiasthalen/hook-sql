@@ -4,7 +4,7 @@ UV_LINK_MODE ?= copy
 
 export UV_LINK_MODE
 
-.PHONY: bootstrap install-pre-commit test test-coverage ruff mypy full-check
+.PHONY: bootstrap install-pre-commit test test-coverage ruff mypy build build-check full-check clean
 
 bootstrap:
 	$(UV) sync --dev
@@ -24,4 +24,13 @@ ruff:
 mypy:
 	$(UV) run mypy src
 
-full-check: test ruff mypy
+build:
+	$(UV) build
+
+build-check: build
+	$(UV) run twine check dist/*
+
+full-check: test ruff mypy build-check
+
+clean:
+	rm -rf dist build .pytest_cache .mypy_cache .ruff_cache *.egg-info
