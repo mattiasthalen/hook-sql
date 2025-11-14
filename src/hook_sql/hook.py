@@ -1,4 +1,4 @@
-from sqlglot import exp
+from sqlglot import exp, parse_one
 
 def build_hooks(hooks: list[dict]) -> list[exp.Expression]:
     """Build SQL expressions for hooks from hook configurations.
@@ -28,9 +28,8 @@ def build_hooks(hooks: list[dict]) -> list[exp.Expression]:
         keyset = hook["keyset"]
         expression = hook["expression"]
         
-        # Convert expression string to SQLGlot expression
-        # For simple column names, use exp.column(); for complex expressions, use exp.to_column()
-        expr_col = exp.to_column(expression)
+        # Parse expression string to SQLGlot expression
+        expr_col = parse_one(expression)
         
         # Build: CASE WHEN {expression} IS NOT NULL THEN '{keyset}|' + {expression} END AS {name}
         hook_expression = exp.alias_(
