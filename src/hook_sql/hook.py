@@ -1,4 +1,4 @@
-from sqlglot import exp, parse_one
+from sqlglot import exp
 
 def build_hooks(hooks: list[dict]) -> list[exp.Expression]:
     """Build SQL expressions for hooks from hook configurations.
@@ -27,9 +27,30 @@ def build_hooks(hooks: list[dict]) -> list[exp.Expression]:
         name = hook["name"]
         keyset = hook["keyset"]
         expression = hook["expression"]
-        hook_expression = parse_one(
-            f"CASE WHEN {expression} IS NOT NULL THEN '{keyset}|' + {expression} END AS {name}",
-            dialect="fabric"
+        
+        # Convert expression string to SQLGlot expression
+        # For simple column names, use exp.column(); for complex expressions, use exp.to_column()
+        expr_col = exp.to_column(expression)
+        
+        # Build: CASE WHEN {expression} IS NOT NULL THEN '{keyset}|' + {expression} END AS {name}
+        hook_expression = exp.alias_(
+            exp.Case(
+                ifs=[
+                    exp.If(
+                        this=exp.Not(
+                            this=exp.Is(
+                                this=expr_col.copy(),
+                                expression=exp.Null()
+                            )
+                        ),
+                        true=exp.Add(
+                            this=exp.Literal.string(f"{keyset}|"),
+                            expression=expr_col.copy()
+                        )
+                    )
+                ]
+            ),
+            name
         )
 
         hook_expressions.append(hook_expression)
@@ -137,84 +158,120 @@ def build_validity_cte(
         FROM test_table
     """
 
-    grain_columns = ', '.join(grain)
+    # Build grain column expressions for PARTITION BY
+    partition_by = [exp.to_column(col) for col in grain]
+    order_by_col = exp.Column(this="_record__loaded_at")
 
-    record_valid_from = parse_one(
-        f"""
-        COALESCE(
-            LAG(_record__loaded_at)
-            OVER (
-                PARTITION BY {grain_columns}
-                ORDER BY _record__loaded_at
+    # COALESCE(LAG(_record__loaded_at) OVER (...), CAST('1970-01-01 00:00:00' AS DATETIME(6)))
+    record_valid_from = exp.alias_(
+        exp.Coalesce(
+            this=exp.Window(
+                this=exp.Lag(this=exp.Column(this="_record__loaded_at")),
+                partition_by=partition_by.copy() if partition_by else None,
+                order=exp.Order(expressions=[order_by_col.copy()])
             ),
-            CAST('1970-01-01 00:00:00' AS DATETIME(6))
-        ) AS _record__valid_from
-        """,
-        dialect="fabric"
-    )
-
-    record_valid_to = parse_one(
-        f"""
-        COALESCE(
-            LEAST(
-                _record__hash_removed_at,
-                LEAD(_record__loaded_at)
-                OVER (
-                    PARTITION BY {grain_columns}
-                    ORDER BY _record__loaded_at
+            expressions=[
+                exp.Cast(
+                    this=exp.Literal.string("1970-01-01 00:00:00"),
+                    to=exp.DataType.build("DATETIME(6)", dialect="fabric")
                 )
+            ]
+        ),
+        "_record__valid_from"
+    )
+
+    # COALESCE(LEAST(_record__hash_removed_at, LEAD(_record__loaded_at) OVER (...)), CAST('9999-12-31 23:59:59.999999' AS DATETIME(6)))
+    record_valid_to = exp.alias_(
+        exp.Coalesce(
+            this=exp.Least(
+                this=exp.Column(this="_record__hash_removed_at"),
+                expressions=[
+                    exp.Window(
+                        this=exp.Lead(this=exp.Column(this="_record__loaded_at")),
+                        partition_by=partition_by.copy() if partition_by else None,
+                        order=exp.Order(expressions=[order_by_col.copy()])
+                    )
+                ]
             ),
-            CAST('9999-12-31 23:59:59.999999' AS DATETIME(6))
-        ) AS _record__valid_to
-        """,
-        dialect="fabric"
-    )
-    record_version = parse_one(
-        f"""
-        ROW_NUMBER()
-        OVER (
-            PARTITION BY {grain_columns} ORDER BY _record__loaded_at
-        ) AS _record__version
-        """,
-        dialect="fabric"
-    )
-
-    record_is_current = parse_one(
-        f"""
-        CASE
-            WHEN LEAD(_record__loaded_at)
-            OVER (
-                PARTITION BY {grain_columns}
-                ORDER BY _record__loaded_at
-            ) IS NULL THEN 1
-            ELSE 0
-        END AS _record__is_current
-        """,
-        dialect="fabric"
-    )
-
-    record_updated_at = parse_one(
-        f"""
-        COALESCE(
-            LEAST(
-                _record__hash_removed_at,
-                LEAD(_record__loaded_at)
-                OVER (
-                    PARTITION BY {grain_columns}
-                    ORDER BY _record__loaded_at
+            expressions=[
+                exp.Cast(
+                    this=exp.Literal.string("9999-12-31 23:59:59.999999"),
+                    to=exp.DataType.build("DATETIME(6)", dialect="fabric")
                 )
-            ),
-            _record__loaded_at
-        ) AS _record__updated_at
-        """,
-        dialect="fabric"
+            ]
+        ),
+        "_record__valid_to"
     )
 
-    record_uid = parse_one(
-        f"""
-        CONCAT_WS('|', {', '.join(grain)}, _record__loaded_at) AS _record__uid
-        """,
-        dialect="fabric"
+    # ROW_NUMBER() OVER (PARTITION BY ... ORDER BY _record__loaded_at)
+    record_version = exp.alias_(
+        exp.Window(
+            this=exp.RowNumber(),
+            partition_by=partition_by.copy() if partition_by else None,
+            order=exp.Order(expressions=[order_by_col.copy()])
+        ),
+        "_record__version"
+    )
+
+    # CASE WHEN LEAD(_record__loaded_at) OVER (...) IS NULL THEN 1 ELSE 0 END
+    record_is_current = exp.alias_(
+        exp.Case(
+            ifs=[
+                exp.If(
+                    this=exp.Is(
+                        this=exp.Window(
+                            this=exp.Lead(this=exp.Column(this="_record__loaded_at")),
+                            partition_by=partition_by.copy() if partition_by else None,
+                            order=exp.Order(expressions=[order_by_col.copy()])
+                        ),
+                        expression=exp.Null()
+                    ),
+                    true=exp.Literal.number(1)
+                )
+            ],
+            default=exp.Literal.number(0)
+        ),
+        "_record__is_current"
+    )
+
+    # COALESCE(LEAST(_record__hash_removed_at, LEAD(_record__loaded_at) OVER (...)), _record__loaded_at)
+    record_updated_at = exp.alias_(
+        exp.Coalesce(
+            this=exp.Least(
+                this=exp.Column(this="_record__hash_removed_at"),
+                expressions=[
+                    exp.Window(
+                        this=exp.Lead(this=exp.Column(this="_record__loaded_at")),
+                        partition_by=partition_by.copy() if partition_by else None,
+                        order=exp.Order(expressions=[order_by_col.copy()])
+                    )
+                ]
+            ),
+            expressions=[exp.Column(this="_record__loaded_at")]
+        ),
+        "_record__updated_at"
+    )
+
+    # CONCAT_WS('|', COALESCE(col1, ''), COALESCE(col2, ''), ...)
+    concat_cols: list[exp.Expression] = [exp.Literal.string("|")]  # Start with separator
+    for col in grain:
+        col_expr = exp.to_column(col)
+        concat_cols.append(
+            exp.Coalesce(
+                this=col_expr,
+                expressions=[exp.Literal.string("")]
+            )
+        )
+    concat_cols.append(
+        exp.Coalesce(
+            this=exp.Column(this="_record__loaded_at"),
+            expressions=[exp.Literal.string("")]
+        )
+    )
+    
+    record_uid = exp.alias_(
+        exp.ConcatWs(expressions=concat_cols),
+        "_record__uid"
     )
 
     sql = exp.select(
@@ -294,7 +351,7 @@ def build_hook_query(
               ),
               _record__loaded_at
             ) AS _record__updated_at,
-            CONCAT_WS('|', COALESCE(COALESCE(id, ''), ''), COALESCE(COALESCE(_record__loaded_at, ''), '')) AS _record__uid
+            CONCAT_WS('|', COALESCE(id, ''), COALESCE(_record__loaded_at, '')) AS _record__uid
           FROM cte__hook
         )
         SELECT
@@ -312,17 +369,20 @@ def build_hook_query(
         grain=grain
     )
 
-    query = parse_one(
-        f"""
-        WITH cte__hook AS (
-            {cte__hook.sql()}
-        ), cte__validity AS (
-            {cte__validity.sql()}
+    # Build the query with CTEs using pure SQLGlot expressions
+    query = (
+        exp.select(exp.Star())
+        .from_("cte__validity")
+        .with_(
+            "cte__hook",
+            cte__hook,
+            dialect="fabric"
         )
-        SELECT *
-        FROM cte__validity
-        """,
-        dialect="fabric"
+        .with_(
+            "cte__validity",
+            cte__validity,
+            dialect="fabric"
+        )
     )
 
     return query
