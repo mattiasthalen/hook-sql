@@ -1,5 +1,97 @@
 from . import hook, uss
 from sqlglot import exp
+from pathlib import Path
+
+
+def write_query_file(path: Path, content: str) -> None:
+    """Write a SQL query to a file.
+    
+    Args:
+        path: Target file path
+        content: SQL query content
+    
+    Example:
+        >>> from pathlib import Path
+        >>> import tempfile
+        >>> with tempfile.TemporaryDirectory() as tmpdir:
+        ...     path = Path(tmpdir) / "test.sql"
+        ...     write_query_file(path, "SELECT 1")
+        ...     path.read_text()
+        'SELECT 1'
+    """
+    path.write_text(content)
+
+
+def create_export_directories(base_path: Path) -> dict[str, Path]:
+    """Create export directory structure.
+    
+    Args:
+        base_path: Base export directory
+    
+    Returns:
+        Dictionary mapping query types to their directory paths
+    
+    Example:
+        >>> from pathlib import Path
+        >>> import tempfile
+        >>> with tempfile.TemporaryDirectory() as tmpdir:
+        ...     base = Path(tmpdir)
+        ...     dirs = create_export_directories(base)
+        ...     all(d.exists() for d in dirs.values())
+        True
+    """
+    directories = {
+        "hook": base_path / "hook",
+        "uss_bridge": base_path / "uss_bridge",
+        "uss_peripheral": base_path / "uss_peripheral",
+    }
+    
+    for directory in directories.values():
+        directory.mkdir(parents=True, exist_ok=True)
+    
+    return directories
+
+
+def export_queries(
+    queries: dict[str, dict],
+    export_path: Path,
+    dialect: str | None = None
+) -> None:
+    """Export queries to SQL files in organized directories.
+    
+    Args:
+        queries: Dictionary of queries by table and query type
+        export_path: Base directory for export
+        dialect: SQL dialect for converting expressions to SQL
+    
+    Example:
+        >>> from pathlib import Path
+        >>> import tempfile
+        >>> with tempfile.TemporaryDirectory() as tmpdir:
+        ...     queries = {
+        ...         "test_table": {
+        ...             "hook": {"query": "SELECT * FROM source"},
+        ...             "uss_bridge": {"query": "SELECT * FROM hook"},
+        ...             "uss_peripheral": {"query": "SELECT * FROM bridge"}
+        ...         }
+        ...     }
+        ...     export_queries(queries, Path(tmpdir))
+        ...     (Path(tmpdir) / "hook" / "test_table.sql").exists()
+        True
+    """
+    directories = create_export_directories(export_path)
+    
+    for table, query_types in queries.items():
+        for query_type, query_info in query_types.items():
+            query = query_info.get("query")
+            if query is not None:
+                # Convert to SQL string if it's an expression
+                if isinstance(query, exp.Expression):
+                    query = query.sql(dialect=dialect, pretty=True)
+                target_dir = directories[query_type]
+                file_path = target_dir / f"{table}.sql"
+                write_query_file(file_path, query)
+
 
 def build_queries(
     *,
@@ -9,7 +101,8 @@ def build_queries(
     uss_target_db: str = "gold",
     uss_target_schema: str = "uss",
     as_sql: bool = True,
-    dialect: str | None = None
+    dialect: str | None = None,
+    export_path: str | Path | None = None
 ) -> dict[str, dict]:
     """
     Example:
@@ -193,5 +286,8 @@ def build_queries(
                 "query": uss_peripheral_query,
             }
         }
+
+    if export_path is not None:
+        export_queries(queries, Path(export_path), dialect=dialect)
 
     return queries

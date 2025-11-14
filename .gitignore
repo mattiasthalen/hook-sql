@@ -208,3 +208,5 @@ __marimo__/
 
 # Version
 src/hook_sql/_version.py
+
+tmp/

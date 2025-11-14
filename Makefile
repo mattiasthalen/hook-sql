@@ -41,7 +41,7 @@ build-check: build
 	$(UV) run twine check dist/*
 
 clean:
-	rm -rf dist build .pytest_cache .mypy_cache .ruff_cache *.egg-info
+	rm -rf dist build .pytest_cache .mypy_cache .ruff_cache *.egg-info tmp
 
 full-check: clean test ruff mypy build-check
 
