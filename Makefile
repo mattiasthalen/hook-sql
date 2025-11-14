@@ -4,17 +4,7 @@ UV_LINK_MODE ?= copy
 
 export UV_LINK_MODE
 
-.PHONY: bootstrap install-pre-commit test test-coverage ruff mypy build build-check full-check clean bump-minor bump-major
-
-# Helper function to get current version
-define get-version
-$(shell git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-endef
-
-# Helper function to parse version components
-define parse-version
-$(shell echo $(1) | sed 's/v\([0-9]*\)\.\([0-9]*\)\.\([0-9]*\)/\$(2)/')
-endef
+.PHONY: bootstrap install-pre-commit test test-coverage ruff mypy build build-check full-check clean release-patch release-minor release-major
 
 bootstrap:
 	$(UV) sync --dev
@@ -45,22 +35,26 @@ clean:
 
 full-check: clean test ruff mypy build-check
 
-# Version bump helper - usage: make bump-version BUMP_TYPE=minor|major
-bump-version:
+# Version release helper - usage: make release-version RELEASE_TYPE=patch|minor|major
+release-version:
 	@echo "Stashing uncommitted changes..."
-	@git stash push -u -m "Auto-stash before version bump" 2>&1 | grep -q "No local changes" && STASHED=1 || STASHED=0; \
+	@git stash push -u -m "Auto-stash before version release" 2>&1 | grep -q "No local changes" && STASHED=1 || STASHED=0; \
 	CURRENT=$$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0"); \
 	echo "Current version: $$CURRENT"; \
 	MAJOR=$$(echo $$CURRENT | sed 's/v\([0-9]*\)\.\([0-9]*\)\.\([0-9]*\)/\1/'); \
 	MINOR=$$(echo $$CURRENT | sed 's/v\([0-9]*\)\.\([0-9]*\)\.\([0-9]*\)/\2/'); \
-	if [ "$(BUMP_TYPE)" = "major" ]; then \
+	PATCH=$$(echo $$CURRENT | sed 's/v\([0-9]*\)\.\([0-9]*\)\.\([0-9]*\)/\3/'); \
+	if [ "$(RELEASE_TYPE)" = "major" ]; then \
 		NEW_MAJOR=$$((MAJOR + 1)); \
 		NEW_VERSION="v$$NEW_MAJOR.0.0"; \
-	elif [ "$(BUMP_TYPE)" = "minor" ]; then \
+	elif [ "$(RELEASE_TYPE)" = "minor" ]; then \
 		NEW_MINOR=$$((MINOR + 1)); \
 		NEW_VERSION="v$$MAJOR.$$NEW_MINOR.0"; \
+	elif [ "$(RELEASE_TYPE)" = "patch" ]; then \
+		NEW_PATCH=$$((PATCH + 1)); \
+		NEW_VERSION="v$$MAJOR.$$MINOR.$$NEW_PATCH"; \
 	else \
-		echo "Error: BUMP_TYPE must be 'minor' or 'major'"; \
+		echo "Error: RELEASE_TYPE must be 'patch', 'minor' or 'major'"; \
 		exit 1; \
 	fi; \
 	echo "New version: $$NEW_VERSION"; \
@@ -73,8 +67,11 @@ bump-version:
 		git stash pop; \
 	fi
 
-bump-minor:
-	$(MAKE) bump-version BUMP_TYPE=minor
+release-patch:
+	$(MAKE) release-version RELEASE_TYPE=patch
 
-bump-major:
-	$(MAKE) bump-version BUMP_TYPE=major
+release-minor:
+	$(MAKE) release-version RELEASE_TYPE=minor
+
+release-major:
+	$(MAKE) release-version RELEASE_TYPE=major
