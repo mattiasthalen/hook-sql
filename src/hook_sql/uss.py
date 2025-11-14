@@ -1,6 +1,6 @@
 from .manifest import build_dag, build_dag_manifest
 
-from sqlglot import exp, parse_one
+from sqlglot import exp
 
 def build_select_clause(
     tables: list[exp.Table]
@@ -165,35 +165,6 @@ def build_direct_temporal_fields() -> list[exp.Expression]:
     return [exp.Column(this=field) for field in temporal_field_names]
 
 
-def build_where_clause(
-    table_name: exp.Table,
-    tables: list[exp.Table],
-    has_joins: bool
-) -> exp.Expression | None:
-    """
-    Build WHERE clause - now returns None since temporal conditions are in JOIN clauses.
-
-    >>> # No joins - should return None
-    >>> orders_table = exp.Table(this='orders')
-    >>> where_none = build_where_clause(orders_table, [orders_table], False)
-    >>> where_none is None
-    True
-
-    >>> # Single table - should return None
-    >>> where_single = build_where_clause(orders_table, [orders_table], True)
-    >>> where_single is None
-    True
-
-    >>> # Multiple tables with joins - should return None (temporal conditions moved to JOINs)
-    >>> customers_table = exp.Table(this='customers')
-    >>> where_multi = build_where_clause(orders_table, [orders_table, customers_table], True)
-    >>> where_multi is None
-    True
-    """
-    # Temporal overlap conditions are now handled in JOIN clauses
-    return None
-
-
 def build_temporal_overlap_conditions(
     main_table: exp.Table,
     joined_table: exp.Table
@@ -224,29 +195,6 @@ def build_temporal_overlap_conditions(
             expression=exp.Column(this="_record__valid_from", table=joined_table.this)
         )
     ]
-
-
-def build_time_range_condition(
-    time_column: str,
-    start_ts: str,
-    end_ts: str
-) -> exp.Expression:
-    """
-    Build a time range condition using BETWEEN with DATETIME(6) casting.
-
-    >>> condition = build_time_range_condition("_record__updated_at", "2024-01-01 00:00:00", "2024-12-31 23:59:59")
-    >>> query = exp.select("*").from_("orders").where(condition)
-    >>> print(query.sql(pretty=True, dialect="fabric"))
-    SELECT
-      *
-    FROM orders
-    WHERE
-      _record__updated_at BETWEEN CAST('2024-01-01 00:00:00' AS DATETIME2(6)) AND CAST('2024-12-31 23:59:59' AS DATETIME2(6))
-    """
-    return parse_one(
-        f"{time_column} BETWEEN CAST('{start_ts}' AS DATETIME(6)) AND CAST('{end_ts}' AS DATETIME(6))",
-        dialect="fabric"
-    )
 
 
 def create_join_expression(
