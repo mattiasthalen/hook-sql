@@ -22,36 +22,6 @@ def write_query_file(path: Path, content: str) -> None:
     path.write_text(content)
 
 
-def create_export_directories(base_path: Path) -> dict[str, Path]:
-    """Create export directory structure.
-    
-    Args:
-        base_path: Base export directory
-    
-    Returns:
-        Dictionary mapping query types to their directory paths
-    
-    Example:
-        >>> from pathlib import Path
-        >>> import tempfile
-        >>> with tempfile.TemporaryDirectory() as tmpdir:
-        ...     base = Path(tmpdir)
-        ...     dirs = create_export_directories(base)
-        ...     all(d.exists() for d in dirs.values())
-        True
-    """
-    directories = {
-        "hook": base_path / "hook",
-        "uss_bridge": base_path / "uss_bridge",
-        "uss_peripheral": base_path / "uss_peripheral",
-    }
-    
-    for directory in directories.values():
-        directory.mkdir(parents=True, exist_ok=True)
-    
-    return directories
-
-
 def export_queries(
     queries: dict[str, dict],
     export_path: Path,
@@ -64,6 +34,7 @@ def export_queries(
         queries: Dictionary of queries by table and query type
         export_path: Base directory for export
         dialect: SQL dialect for converting expressions to SQL
+        identify: Whether to quote identifiers
     
     Example:
         >>> from pathlib import Path
@@ -71,26 +42,36 @@ def export_queries(
         >>> with tempfile.TemporaryDirectory() as tmpdir:
         ...     queries = {
         ...         "test_table": {
-        ...             "hook": {"query": "SELECT * FROM source"},
-        ...             "uss_bridge": {"query": "SELECT * FROM hook"},
-        ...             "uss_peripheral": {"query": "SELECT * FROM bridge"}
+        ...             "hook": {
+        ...                 "query": "SELECT * FROM source",
+        ...                 "target_database": "silver",
+        ...                 "target_schema": "hook",
+        ...                 "target_table": "test_table"
+        ...             }
         ...         }
         ...     }
         ...     export_queries(queries, Path(tmpdir))
-        ...     (Path(tmpdir) / "hook" / "test_table.sql").exists()
+        ...     (Path(tmpdir) / "silver" / "hook" / "test_table.sql").exists()
         True
     """
-    directories = create_export_directories(export_path)
     
     for table, query_types in queries.items():
         for query_type, query_info in query_types.items():
             query = query_info.get("query")
-            if query is not None:
+            target_database = query_info.get("target_database")
+            target_schema = query_info.get("target_schema")
+            target_table = query_info.get("target_table", table)
+            
+            if query is not None and target_database and target_schema:
                 # Convert to SQL string if it's an expression
                 if isinstance(query, exp.Expression):
                     query = query.sql(dialect=dialect, pretty=True, identify=identify)
-                target_dir = directories[query_type]
-                file_path = target_dir / f"{table}.sql"
+                
+                # Create folder structure: export_path / target_database / target_schema / target_table.sql
+                target_dir = export_path / target_database / target_schema
+                target_dir.mkdir(parents=True, exist_ok=True)
+                
+                file_path = target_dir / f"{target_table}.sql"
                 write_query_file(file_path, query)
 
 
@@ -99,8 +80,11 @@ def build_queries(
     manifest: dict[str, dict],
     hook_target_db: str = "silver",
     hook_target_schema: str = "hook",
+    hook_prefix: str | None = None,
     uss_target_db: str = "gold",
     uss_target_schema: str = "uss",
+    uss_bridge_prefix: str | None = "_bridge",
+    uss_peripheral_prefix: str | None = None,
     as_sql: bool = True,
     dialect: str | None = None,
     export_path: str | Path | None = None,
@@ -186,7 +170,7 @@ def build_queries(
         ...     )
         ... }
         >>> queries = build_queries(manifest=manifest)
-        >>> print(json.dumps(queries, indent=2))
+        >>> print(json.dumps(queries, indent=2))  # doctest: +ELLIPSIS
         {
           "northwind__orders": {
             "hook": {
@@ -227,7 +211,8 @@ def build_queries(
               "target_table": "northwind__customers",
               "query": "..."
             }
-          }
+          },
+          ...
         }
     """
     queries = {}
@@ -272,19 +257,19 @@ def build_queries(
             "hook": {
                 "target_database": hook_target_db,
                 "target_schema": hook_target_schema,
-                "target_table": table,
+                "target_table": f"{hook_prefix}__{table}" if hook_prefix else table,
                 "query": hook_query,
             },
             "uss_bridge": {
                 "target_database": uss_target_db,
                 "target_schema": uss_target_schema,
-                "target_table": f"_bridge__{table}",
+                "target_table": f"{uss_bridge_prefix}__{table}" if uss_bridge_prefix else table,
                 "query": uss_bridge_query,
             },
             "uss_peripheral": {
                 "target_database": uss_target_db,
                 "target_schema": uss_target_schema,
-                "target_table": table,
+                "target_table": f"{uss_peripheral_prefix}__{table}" if uss_peripheral_prefix else table,
                 "query": uss_peripheral_query,
             }
         }
