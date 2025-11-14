@@ -100,11 +100,6 @@ def build_queries(
         ...         schema="northwind",
         ...         table="orders",
         ...         grain=["_HK__order"],
-        ...         columns={
-        ...             "id": "int",
-        ...             "customer_id": "int",
-        ...             "order_date": "datetime"
-        ...         },
         ...         hooks=[
         ...             {
         ...                 "name": "_HK__order",
@@ -127,10 +122,6 @@ def build_queries(
         ...         schema="northwind",
         ...         table="customers",
         ...         grain=["_HK__customer"],
-        ...         columns={
-        ...             "id": "int",
-        ...             "name": "string"
-        ...         },
         ...         hooks=[
         ...             {
         ...                 "name": "_HK__customer",
@@ -153,10 +144,6 @@ def build_queries(
         ...         schema="northwind",
         ...         table="regions",
         ...         grain=["_HK__region"],
-        ...         columns={
-        ...             "id": "int",
-        ...             "name": "string"
-        ...         },
         ...         hooks=[
         ...             {
         ...                 "name": "_HK__region",
@@ -249,7 +236,6 @@ def build_queries(
                 db=exp.to_identifier(hook_target_schema),
                 catalog=exp.to_identifier(hook_target_db)
             ),
-            source_columns=spec.get("columns", []),
         )
         uss_peripheral_query = uss_peripheral_query_expr.sql(dialect=dialect, pretty=True, identify=identify) if as_sql else uss_peripheral_query_expr
 

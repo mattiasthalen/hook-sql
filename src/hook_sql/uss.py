@@ -417,17 +417,25 @@ def build_bridge_query(
 def build_peripheral_query(
     *,
     source_table: exp.Table,
-    source_columns: dict[str, str],
 ) -> exp.Expression:
+    """
+    Generate SQL for peripheral tables selecting the UID and all source columns.
 
+    >>> products = exp.Table(this='shop__products', db='hook', catalog='silver')
+    >>> query = build_peripheral_query(source_table=products)
+    >>> print(query.sql(pretty=True))
+    SELECT
+      shop__products._record__uid AS _UID__shop__products,
+      *
+    FROM silver.hook.shop__products
+    """
 
-    select_columns = [exp.column(col) for col, dtype in source_columns.items() if not col.startswith("_HK__") and col != "_record__uid"]
     record_uid = exp.column("_record__uid", table=source_table.this).as_(f"_UID__{source_table.this}")
 
     query = (
         exp.select(
             record_uid,
-            *select_columns,
+            exp.Star(),
         )
         .from_(source_table)
     )
